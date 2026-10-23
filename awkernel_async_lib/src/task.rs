@@ -194,6 +194,7 @@ pub struct TaskInfo {
     pub(crate) need_preemption: bool,
     panicked: bool,
     pub(crate) dag_info: Option<DagInfo>,
+    freq: Option<u64>,
 
     #[cfg(not(feature = "no_preempt"))]
     thread: Option<PtrWorkerThreadContext>,
@@ -260,6 +261,16 @@ impl TaskInfo {
     #[inline(always)]
     pub fn get_dag_info(&self) -> Option<DagInfo> {
         self.dag_info.clone()
+    }
+
+    #[inline(always)]
+    pub fn update_freq(&mut self, freq: u64) {
+        self.freq = Some(freq);
+    }
+
+    #[inline(always)]
+    pub fn get_freq(&self) -> Option<u64> {
+        self.freq
     }
 }
 
@@ -345,6 +356,7 @@ impl Tasks {
                     need_preemption: false,
                     panicked: false,
                     dag_info,
+                    freq: None,
 
                     #[cfg(not(feature = "no_preempt"))]
                     thread: None,
