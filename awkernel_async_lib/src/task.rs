@@ -194,6 +194,7 @@ pub struct TaskInfo {
     pub(crate) need_preemption: bool,
     panicked: bool,
     pub(crate) dag_info: Option<DagInfo>,
+    freq: Option<u64>,
 
     #[cfg(not(feature = "no_preempt"))]
     thread: Option<PtrWorkerThreadContext>,
@@ -261,6 +262,16 @@ impl TaskInfo {
     pub fn get_dag_info(&self) -> Option<DagInfo> {
         self.dag_info.clone()
     }
+
+    #[inline(always)]
+    pub fn update_freq(&mut self, freq: u64) {
+        self.freq = Some(freq);
+    }
+
+    #[inline(always)]
+    pub fn get_freq(&self) -> Option<u64> {
+        self.freq
+    }
 }
 
 /// State of task.
@@ -303,6 +314,7 @@ impl Tasks {
         scheduler: &'static dyn Scheduler,
         mut scheduler_type: SchedulerType,
         dag_info: Option<DagInfo>,
+        freq: Option<u64>,
     ) -> u32 {
         let mut id = self.candidate_id;
         loop {
@@ -345,6 +357,7 @@ impl Tasks {
                     need_preemption: false,
                     panicked: false,
                     dag_info,
+                    freq,
 
                     #[cfg(not(feature = "no_preempt"))]
                     thread: None,
@@ -412,7 +425,7 @@ pub fn spawn(
     future: impl Future<Output = TaskResult> + 'static + Send,
     sched_type: SchedulerType,
 ) -> u32 {
-    inner_spawn(name, future, sched_type, None)
+    inner_spawn(name, future, sched_type, None, None)
 }
 
 /// Spawn a detached task with DAG information.
@@ -441,7 +454,16 @@ pub fn spawn_with_dag_info(
     sched_type: SchedulerType,
     dag_info: DagInfo,
 ) -> u32 {
-    inner_spawn(name, future, sched_type, Some(dag_info))
+    inner_spawn(name, future, sched_type, Some(dag_info), None)
+}
+
+pub fn spawn_with_freq(
+    name: Cow<'static, str>,
+    future: impl Future<Output = TaskResult> + 'static + Send,
+    sched_type: SchedulerType,
+    freq: Option<u64>,
+) -> u32 {
+    inner_spawn(name, future, sched_type, None, freq)
 }
 
 pub fn inner_spawn(
@@ -449,6 +471,7 @@ pub fn inner_spawn(
     future: impl Future<Output = TaskResult> + 'static + Send,
     sched_type: SchedulerType,
     dag_info: Option<DagInfo>,
+    freq: Option<u64>,
 ) -> u32 {
     if let SchedulerType::PrioritizedFIFO(p) | SchedulerType::PrioritizedRR(p) = sched_type {
         if p > HIGHEST_PRIORITY {
@@ -464,7 +487,7 @@ pub fn inner_spawn(
 
     let mut node = MCSNode::new();
     let mut tasks = TASKS.lock(&mut node);
-    let id = tasks.spawn(name, future.fuse(), scheduler, sched_type, dag_info);
+    let id = tasks.spawn(name, future.fuse(), scheduler, sched_type, dag_info, freq);
     let task = tasks.id_to_task.get(&id).cloned();
     drop(tasks);
 
